@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.8536585365853658,4.2824625968933105,1.0797903537750244,ProximalPhalanxOutlineAgeGroup,num_kernels=10_000,Rocket
+1,0.8536585365853658,3.964838981628418,1.7061309814453125,ProximalPhalanxOutlineAgeGroup,convst: n_shapelets=10_000,RDST
+2,0.8682926829268293,4.268821954727173,1.0765016078948975,ProximalPhalanxOutlineAgeGroup,num_kernels=10_000,Rocket
+3,0.848780487804878,3.9402573108673096,1.6882870197296143,ProximalPhalanxOutlineAgeGroup,convst: n_shapelets=10_000,RDST
+4,0.848780487804878,4.30788254737854,1.084998369216919,ProximalPhalanxOutlineAgeGroup,num_kernels=10_000,Rocket
+5,0.8439024390243902,3.935472011566162,1.6848914623260498,ProximalPhalanxOutlineAgeGroup,convst: n_shapelets=10_000,RDST
+6,0.8585365853658536,4.307936906814575,1.085350751876831,ProximalPhalanxOutlineAgeGroup,num_kernels=10_000,Rocket
+7,0.848780487804878,3.999297618865967,1.7030699253082275,ProximalPhalanxOutlineAgeGroup,convst: n_shapelets=10_000,RDST
+8,0.8536585365853658,4.289273262023926,1.0844902992248535,ProximalPhalanxOutlineAgeGroup,num_kernels=10_000,Rocket
+9,0.8390243902439024,3.9780678749084473,1.6956381797790527,ProximalPhalanxOutlineAgeGroup,convst: n_shapelets=10_000,RDST

@@ -1,0 +1,21 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.86,2.214473247528076,1.1043567657470703,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+1,0.96,1.5064361095428467,1.0412304401397705,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+2,0.82,2.9331107139587402,1.1089987754821777,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+3,0.96,1.5269825458526611,1.0471093654632568,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+4,0.84,2.221731424331665,1.1115128993988037,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+5,0.96,1.513077974319458,1.0637896060943604,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+6,0.84,2.220125436782837,1.1040022373199463,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+7,0.96,1.4991607666015625,1.0515706539154053,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+8,0.84,2.2238903045654297,1.1097025871276855,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+9,0.96,1.52824068069458,1.0594327449798584,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+10,0.84,2.2254586219787598,1.1027991771697998,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+11,0.96,1.4987599849700928,1.038585901260376,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+12,0.86,2.2220616340637207,1.109119176864624,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+13,0.96,1.4863741397857666,1.0289638042449951,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+14,0.84,2.22339129447937,1.1046535968780518,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+15,0.96,1.476128339767456,1.0236103534698486,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+16,0.84,2.228466272354126,1.1064682006835938,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+17,0.96,1.5068683624267578,2.0119516849517822,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+18,0.82,3.2387661933898926,1.1770482063293457,ShakeGestureWiimoteZ,num_kernels=10_000,Rocket
+19,0.96,1.564098834991455,1.1143782138824463,ShakeGestureWiimoteZ,convst: n_shapelets=10_000,RDST

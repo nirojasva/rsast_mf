@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.9968354430379747,2.469074010848999,2.792346239089966,GunPointMaleVersusFemale,num_kernels=10_000,Rocket
+1,1.0,2.46475887298584,4.833548545837402,GunPointMaleVersusFemale,convst: n_shapelets=10_000,RDST
+2,0.9968354430379747,2.4630184173583984,2.781529188156128,GunPointMaleVersusFemale,num_kernels=10_000,Rocket
+3,1.0,2.4513845443725586,4.801771402359009,GunPointMaleVersusFemale,convst: n_shapelets=10_000,RDST
+4,1.0,2.4768214225769043,2.7876036167144775,GunPointMaleVersusFemale,num_kernels=10_000,Rocket
+5,1.0,2.453400135040283,4.810467958450317,GunPointMaleVersusFemale,convst: n_shapelets=10_000,RDST
+6,0.9968354430379747,2.4808285236358643,2.8043651580810547,GunPointMaleVersusFemale,num_kernels=10_000,Rocket
+7,1.0,2.458432674407959,4.820590019226074,GunPointMaleVersusFemale,convst: n_shapelets=10_000,RDST
+8,0.9968354430379747,2.460156202316284,2.795212745666504,GunPointMaleVersusFemale,num_kernels=10_000,Rocket
+9,1.0,2.448676109313965,4.787902593612671,GunPointMaleVersusFemale,convst: n_shapelets=10_000,RDST

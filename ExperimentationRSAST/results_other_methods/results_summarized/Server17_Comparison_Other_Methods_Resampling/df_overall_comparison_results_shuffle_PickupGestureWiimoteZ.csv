@@ -1,0 +1,21 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.78,2.105289936065674,1.102668285369873,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+1,0.78,1.525667428970337,1.1005051136016846,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+2,0.76,2.159946918487549,1.1119048595428467,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+3,0.78,1.4517731666564941,1.014890432357788,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+4,0.76,2.0884530544281006,1.042663335800171,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+5,0.78,1.4492731094360352,1.019784688949585,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+6,0.76,2.0888938903808594,1.0415394306182861,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+7,0.8,1.4595293998718262,1.0274250507354736,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+8,0.78,2.074859142303467,1.0337793827056885,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+9,0.78,1.4498028755187988,1.0163953304290771,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+10,0.78,2.0857791900634766,1.0333762168884277,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+11,0.78,1.455568552017212,1.0208916664123535,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+12,0.76,2.097130298614502,1.0455689430236816,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+13,0.76,1.460719347000122,1.0284004211425781,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+14,0.8,2.0863523483276367,1.037487506866455,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+15,0.78,1.4732880592346191,1.0405302047729492,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+16,0.78,2.0814998149871826,1.0371150970458984,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+17,0.78,1.4509210586547852,1.018477201461792,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+18,0.76,2.094758987426758,1.0463142395019531,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+19,0.76,1.4689617156982422,1.0361168384552002,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST

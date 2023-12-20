@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.84,2.084024429321289,1.0400550365447998,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+1,0.86,1.4099128246307373,0.9949185848236084,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+2,0.82,2.085118293762207,1.0384693145751953,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+3,0.84,1.3945438861846924,0.9823460578918457,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+4,0.82,2.1018545627593994,1.0521891117095947,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+5,0.84,1.4146826267242432,1.0001611709594727,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+6,0.82,2.0953805446624756,1.0462219715118408,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+7,0.84,1.4040722846984863,0.9913105964660645,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST
+8,0.82,2.088294744491577,1.048882246017456,PickupGestureWiimoteZ,num_kernels=10_000,Rocket
+9,0.82,1.3982014656066895,0.9898366928100586,PickupGestureWiimoteZ,convst: n_shapelets=10_000,RDST

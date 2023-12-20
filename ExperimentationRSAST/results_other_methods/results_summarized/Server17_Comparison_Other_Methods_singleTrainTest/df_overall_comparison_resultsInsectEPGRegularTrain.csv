@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,1.0,4.1297688484191895,8.11531949043274,InsectEPGRegularTrain,num_kernels=10_000,Rocket
+1,1.0,4.9517621994018555,16.218964338302612,InsectEPGRegularTrain,convst: n_shapelets=10_000,RDST
+2,0.9959839357429718,4.135248899459839,8.111319303512573,InsectEPGRegularTrain,num_kernels=10_000,Rocket
+3,1.0,4.940004110336304,16.183997869491577,InsectEPGRegularTrain,convst: n_shapelets=10_000,RDST
+4,1.0,4.153976202011108,8.126471519470215,InsectEPGRegularTrain,num_kernels=10_000,Rocket
+5,1.0,4.92963981628418,16.13282299041748,InsectEPGRegularTrain,convst: n_shapelets=10_000,RDST
+6,1.0,4.149396181106567,8.117601156234741,InsectEPGRegularTrain,num_kernels=10_000,Rocket
+7,1.0,4.930589437484741,16.1721134185791,InsectEPGRegularTrain,convst: n_shapelets=10_000,RDST
+8,1.0,4.134840488433838,8.10892939567566,InsectEPGRegularTrain,num_kernels=10_000,Rocket
+9,1.0,4.943284749984741,16.186915159225464,InsectEPGRegularTrain,convst: n_shapelets=10_000,RDST

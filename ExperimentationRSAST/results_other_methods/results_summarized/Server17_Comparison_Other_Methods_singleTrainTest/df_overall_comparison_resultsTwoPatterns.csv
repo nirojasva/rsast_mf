@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,1.0,16.371110677719116,31.948031902313232,TwoPatterns,num_kernels=10_000,Rocket
+1,1.0,16.919889211654663,54.17472314834595,TwoPatterns,convst: n_shapelets=10_000,RDST
+2,1.0,16.378342390060425,30.484128713607788,TwoPatterns,num_kernels=10_000,Rocket
+3,1.0,16.553868293762207,53.370888471603394,TwoPatterns,convst: n_shapelets=10_000,RDST
+4,1.0,16.476242065429688,30.36655616760254,TwoPatterns,num_kernels=10_000,Rocket
+5,1.0,16.71977949142456,53.925328969955444,TwoPatterns,convst: n_shapelets=10_000,RDST
+6,1.0,16.939462423324585,30.306967735290527,TwoPatterns,num_kernels=10_000,Rocket
+7,1.0,16.564469575881958,53.556814193725586,TwoPatterns,convst: n_shapelets=10_000,RDST
+8,1.0,16.47022795677185,31.045668601989746,TwoPatterns,num_kernels=10_000,Rocket
+9,1.0,16.59747290611267,53.431060552597046,TwoPatterns,convst: n_shapelets=10_000,RDST

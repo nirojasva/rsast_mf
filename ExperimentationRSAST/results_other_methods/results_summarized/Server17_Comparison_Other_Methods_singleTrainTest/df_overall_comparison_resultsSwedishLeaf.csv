@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.9648,7.9295573234558105,4.75598406791687,SwedishLeaf,num_kernels=10_000,Rocket
+1,0.9632,7.918105840682983,10.302707433700562,SwedishLeaf,convst: n_shapelets=10_000,RDST
+2,0.968,7.968639850616455,4.740839958190918,SwedishLeaf,num_kernels=10_000,Rocket
+3,0.968,8.879359483718872,8.239617586135864,SwedishLeaf,convst: n_shapelets=10_000,RDST
+4,0.968,7.95636773109436,4.732402324676514,SwedishLeaf,num_kernels=10_000,Rocket
+5,0.968,8.948599815368652,8.279813289642334,SwedishLeaf,convst: n_shapelets=10_000,RDST
+6,0.9632,8.919887781143188,4.740062952041626,SwedishLeaf,num_kernels=10_000,Rocket
+7,0.9664,7.905744552612305,10.33969259262085,SwedishLeaf,convst: n_shapelets=10_000,RDST
+8,0.9616,10.07454228401184,5.586559057235718,SwedishLeaf,num_kernels=10_000,Rocket
+9,0.9696,8.038025379180908,9.111594676971436,SwedishLeaf,convst: n_shapelets=10_000,RDST

@@ -1,0 +1,11 @@
+,accuracy,time_fit,time_test,dataset_name,hyperparameter,classifier_name
+0,0.9873015873015873,2.512691020965576,2.810629367828369,GunPointOldVersusYoung,num_kernels=10_000,Rocket
+1,1.0,2.4721758365631104,4.801253795623779,GunPointOldVersusYoung,convst: n_shapelets=10_000,RDST
+2,0.9873015873015873,2.4986188411712646,2.7925896644592285,GunPointOldVersusYoung,num_kernels=10_000,Rocket
+3,1.0,2.475105047225952,4.808012247085571,GunPointOldVersusYoung,convst: n_shapelets=10_000,RDST
+4,0.9873015873015873,2.491975784301758,2.789699077606201,GunPointOldVersusYoung,num_kernels=10_000,Rocket
+5,1.0,2.4774210453033447,4.819484233856201,GunPointOldVersusYoung,convst: n_shapelets=10_000,RDST
+6,0.9873015873015873,2.479710817337036,2.775851011276245,GunPointOldVersusYoung,num_kernels=10_000,Rocket
+7,1.0,2.4817469120025635,4.831097602844238,GunPointOldVersusYoung,convst: n_shapelets=10_000,RDST
+8,0.9936507936507937,2.48691725730896,2.7842142581939697,GunPointOldVersusYoung,num_kernels=10_000,Rocket
+9,1.0,2.4763131141662598,4.817234516143799,GunPointOldVersusYoung,convst: n_shapelets=10_000,RDST
