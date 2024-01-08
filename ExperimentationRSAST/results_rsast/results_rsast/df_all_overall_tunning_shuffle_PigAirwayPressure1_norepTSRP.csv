@@ -1,2 +1,0 @@
-,accuracy,time,cweights_time,fsubsequence_time,tdataset_time,tclassifier_time,dataset_name,classifier_name,rpoint,nb_per_class,method,len_method
-0,0.2980769230769231,14213.711376905441,3.097928524017334,13946.092595338821,263.9326400756836,0.44609594345092773,PigAirwayPressure,ACF&PACF: n_random_points=10 nb_inst_per_class=10,10,10,Rsast,ACF&PACF
