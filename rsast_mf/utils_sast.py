@@ -10,8 +10,8 @@ from numba import njit, prange
 
 @njit(fastmath=True)
 def znormalize_array(arr):
-    m = np.mean(arr)
-    s = np.std(arr)
+    m = np.nanmean(arr)
+    s = np.nanstd(arr)
 
     # s[s == 0] = 1 # avoid division by zero if any
 
