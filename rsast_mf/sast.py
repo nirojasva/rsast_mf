@@ -52,25 +52,57 @@ import math
 def apply_kernel(ts, arr):
     d_best = np.inf  # sdist
     m = ts.shape[0]
-    kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel=arr
+    #kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel = arr[~np.isinf(arr)]  # ignore inf
 
     # profile = mass2(ts, kernel)
     # d_best = np.min(profile)
 
     l = kernel.shape[0]
     for i in range(m - l + 1):
-        d = np.sum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        
+        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
         if d < d_best:
             d_best = d
 
     return d_best
 
+
+def get_lambda_rdst(ts, arr, q_max, q_min):
+
+    m = ts.shape[0]
+    kernel=arr
+    #kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel = arr[~np.isinf(arr)]  # ignore inf
+    d_vector = []
+
+
+    l = kernel.shape[0]
+
+    for i in range(m - l + 1):
+        
+        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        d_vector.append(d)
+    
+    quantiles = np.quantile(d_vector, [q_min, q_max])
+    
+    
+    random_value = np.random.uniform(quantiles[0], quantiles[1])
+    
+
+    return random_value
+
 @njit(fastmath=False)
-def apply_kernel_mf(ts, arr, q_max, q_min):
+def apply_kernel_mf(ts, arr, lm):
     d_best = np.inf  # sdist
     p_best = 0  
     m = ts.shape[0]
-    kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel=arr
+    
+    #kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel = arr[~np.isinf(arr)]  # ignore inf
+
     d_vector = []
     occ=0
     # profile = mass2(ts, kernel)
@@ -79,16 +111,17 @@ def apply_kernel_mf(ts, arr, q_max, q_min):
     l = kernel.shape[0]
 
     for i in range(m - l + 1):
-        d = np.sum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        
+        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
         d_vector.append(d)
         if d < d_best:
             d_best = d
             p_best = i
-    quantiles = np.quantile(d_vector, [q_min, q_max])
+
     for dist in d_vector:
         
         #if dist <= d_best*(1+q_max):
-        if dist >= quantiles[0] and dist <= quantiles[1]:    
+        if dist < lm:    
             occ=occ+1
     #print("d_vector")
     #print(d_vector)
@@ -101,7 +134,11 @@ def apply_kernel_dict(ts, arr, q_max, q_min):
     d_best = np.inf  # sdist
     p_best = 0  
     m = ts.shape[0]
-    kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel=arr
+    
+    #kernel = arr[~np.isnan(arr)]  # ignore nan
+    kernel = arr[~np.isinf(arr)]  # ignore inf
+
     d_vector = []
     occ=0
     # profile = mass2(ts, kernel)
@@ -110,7 +147,8 @@ def apply_kernel_dict(ts, arr, q_max, q_min):
     l = kernel.shape[0]
 
     for i in range(m - l + 1):
-        d = np.sum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        
+        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
         d_vector.append(d)
         if d < d_best:
             d_best = d
@@ -150,18 +188,19 @@ def apply_kernels_dict(X, kernels, q, q_min):
     return out
 
 @njit(parallel=True, fastmath=True)
-def apply_kernels_mf(X, kernels, q, q_min):
+def apply_kernels_mf(X, kernels, lms):
     #print("Transforming Dataset with shape:"+str(X.shape))
     #print("Total kernel: "+str(len(kernels)))
     nbk = len(kernels)
     out = np.zeros((X.shape[0], nbk*3), dtype=np.float32)
     for i in prange(nbk):
         k = kernels[i]
+        l = lms[i]
         for t in range(X.shape[0]):
             #print("TS: "+str(t)+" kernel: "+str(i))
             ts = X[t]
             #out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, q)
-            out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, q, q_min)
+            out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, l)
             
     
     
@@ -543,7 +582,7 @@ class RSAST(BaseEstimator, ClassifierMixin):
         
         
         self.kernels_ = np.full(
-            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.nan)
+            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.inf)
         
         for k, kernel in enumerate(self.kernel_permutated_):
             self.kernels_[k, :len(kernel)] = znormalize_array(kernel)
@@ -628,6 +667,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         self.kernels_generators_ = None
         self.class_kernel_ = None
         self.dilation_kernel_ = None
+        self.lambda_kernel_ = None
         self.sel_inst_wrepl=sel_inst_wrepl
         self.sel_randp_wrepl=sel_randp_wrepl
         self.time_calculating_weights = None
@@ -657,6 +697,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         self.kernels_generators_ = []
         self.class_kernel_ = []
         self.dilation_kernel_ = []
+        self.lambda_kernel_ = []
 
         
         
@@ -799,15 +840,19 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
                     
                     
                     for i in rand_point_ts:        
-                        x=random.uniform(0, math.log2(X_c.shape[1] / max_shp_length))
+                        #max_shp_length=5      
+                        x=random.uniform(0, math.log2(len(X_c[idx]) / max_shp_length))
                         shp_dil=int(2**x)
-                        shp_dil=1
-                        #print("dil: 2**"+str(x)+"="+str(shp_dil))
+                        #shp_dil=1
+                        max_shp_length=max_shp_length*shp_dil
+                        #print("dil: 2**"+str(x)+"="+str(int(2**x)))
+                        #print("orig kernel-len "+str((max_shp_length))+":"+str(X_c[idx][i:i+max_shp_length]))
+                        
                         #2.6-- Extract the subsequence with that point
                         kernel = X_c[idx][i:i+max_shp_length].reshape(1,-1)
                         kernel = np.squeeze(kernel)
-                        if shp_dil>1: 
-                            print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
+                        #if shp_dil>1: 
+                            #print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
                         
                         for j in range(len(kernel)):
                             
@@ -816,15 +861,19 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
                             else: 
                                 kernel[j]=np.nan
 
-                        if shp_dil>1:    
-                            print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
+                        #if shp_dil>1:    
+                            #print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
                         if m_kernel<max_shp_length:
                             m_kernel = max_shp_length            
                         
+                        #choosen = self.random_state.choice(X_c.shape[0], 1)[0]
+                        ld = get_lambda_rdst(X_c[idx], kernel, self.q_max, self.q_min)
+
                         self.kernel_orig_.append(kernel)
                         self.kernels_generators_.append(np.squeeze(X_c[idx].reshape(1,-1)))
                         self.class_kernel_.append(c)
                         self.dilation_kernel_.append(shp_dil)
+                        self.lambda_kernel_.append(ld)
         
         print("total kernels:"+str(len(self.kernel_orig_)))
         
@@ -837,7 +886,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         
         
         self.kernels_ = np.full(
-            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.nan)
+            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.inf)
         
         for k, kernel in enumerate(self.kernel_orig_):
             self.kernels_[k, :len(kernel)] = znormalize_array(kernel)
@@ -854,7 +903,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
 
         start = time.time()
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.q_max, self.q_min)
+        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
         end = time.time()
         self.transform_dataset = end-start
 
@@ -888,7 +937,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         X = check_array(X)  # validate the shape of X
 
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.q_max, self.q_min)
+        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
 
         return self.classifier.predict(X_transformed)
 
@@ -898,7 +947,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         X = check_array(X)  # validate the shape of X
 
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.q_max, self.q_min)
+        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
 
         if isinstance(self.classifier, LinearClassifierMixin):
             return self.classifier._predict_proba_lr(X_transformed)
@@ -1191,16 +1240,18 @@ class DICTRSAST(BaseEstimator, ClassifierMixin):
                     
                     
                     
-                    for i in rand_point_ts:        
-                        x=random.uniform(0, math.log2(X_c.shape[1] / max_shp_length))
+                    for i in rand_point_ts:  
+                        #max_shp_length=5      
+                        x=random.uniform(0, math.log2(len(X_c[idx]) / max_shp_length))
                         shp_dil=int(2**x)
-                        shp_dil=1
-                        #print("dil: 2**"+str(x)+"="+str(shp_dil))
+                        #shp_dil=1
+                        max_shp_length=max_shp_length*shp_dil
+                        #print("dil: 2**"+str(x)+"="+str(int(2**x)))
+                        #print("orig kernel-len "+str((max_shp_length))+":"+str(X_c[idx][i:i+max_shp_length]))
                         #2.6-- Extract the subsequence with that point
+                        
                         kernel = X_c[idx][i:i+max_shp_length].reshape(1,-1)
                         kernel = np.squeeze(kernel)
-                        if shp_dil>1: 
-                            print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
                         
                         for j in range(len(kernel)):
                             
@@ -1209,10 +1260,10 @@ class DICTRSAST(BaseEstimator, ClassifierMixin):
                             else: 
                                 kernel[j]=np.nan
 
-                        if shp_dil>1:    
-                            print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
+                        #if shp_dil>1:    
+                            #print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
                         if m_kernel<max_shp_length:
-                            m_kernel = max_shp_length            
+                            m_kernel = max_shp_length        
                         
                         self.kernel_orig_.append(kernel)
                         self.kernels_generators_.append(np.squeeze(X_c[idx].reshape(1,-1)))
@@ -1230,7 +1281,7 @@ class DICTRSAST(BaseEstimator, ClassifierMixin):
         
         
         self.kernels_ = np.full(
-            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.nan)
+            (n_kernels, m_kernel), dtype=np.float32, fill_value=np.inf)
         
         for k, kernel in enumerate(self.kernel_orig_):
             self.kernels_[k, :len(kernel)] = znormalize_array(kernel)
@@ -1397,7 +1448,7 @@ class DICTRSAST(BaseEstimator, ClassifierMixin):
 
 if __name__ == "__main__":
 
-    ds='Adiac' # Chosing a dataset from # Number of classes to consider
+    ds='Fungi' # Chosing a dataset from # Number of classes to consider
 
     rtype="numpy2D"
     
@@ -1437,7 +1488,7 @@ if __name__ == "__main__":
     X_train_mod=np.nan_to_num(X_train_mod)
     """
 
-    path="/home/nicolas/rsast_mf/sast/data"
+    path="/home/nicolas/rsast_mf/rsast_mf/data/"
     ds_train_lds , ds_test_lds = load_dataset(ds_folder=path,ds_name=ds,shuffle=False)
     X_test_lds, y_test_lds = format_dataset(ds_test_lds)
     X_train_lds, y_train_lds = format_dataset(ds_train_lds)
@@ -1459,7 +1510,7 @@ if __name__ == "__main__":
     
 
    
-    """
+    
     start = time.time()
     random_state = None
     rsast_ridge = RSAST(n_random_points=10, nb_inst_per_class=10, len_method="both")
@@ -1468,13 +1519,13 @@ if __name__ == "__main__":
     print('rsast score :', rsast_ridge.score(X_test_lds, y_test_lds))
     print('duration:', end-start)
     print('params:', rsast_ridge.get_params()) 
-    plot_most_important_feature_on_ts(set_ts=rsast_ridge.kernels_generators_, labels=rsast_ridge.class_generators_, features=rsast_ridge.kernel_orig_, scores=rsast_ridge.classifier.coef_[0], limit=3, offset=0,znormalized=False)   
-    plot_most_important_features(rsast_ridge.kernel_orig_, rsast_ridge.classifier.coef_[0], limit=3,scale_color=False)
+    #plot_most_important_feature_on_ts(set_ts=rsast_ridge.kernels_generators_, labels=rsast_ridge.class_generators_, features=rsast_ridge.kernel_orig_, scores=rsast_ridge.classifier.coef_[0], limit=3, offset=0,znormalized=False)   
+    #plot_most_important_features(rsast_ridge.kernel_orig_, rsast_ridge.classifier.coef_[0], limit=3,scale_color=False)
 
-
+    
     start = time.time()
     random_state = None
-    rsastmf_ridge = RSASTMF(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0, q_min=0)
+    rsastmf_ridge = RSASTMF(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0.1, q_min=0)
     rsastmf_ridge.fit(X_train_lds, y_train_lds)
     end = time.time()
     print('rsastmf score :', rsastmf_ridge.score(X_test_lds, y_test_lds))
@@ -1490,13 +1541,13 @@ if __name__ == "__main__":
 
     start = time.time()
     random_state = None
-    dictrsast_ridge = DICTRSAST(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0, q_min=0)
+    dictrsast_ridge = DICTRSAST(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0.1, q_min=0)
     dictrsast_ridge.fit(X_train_lds, y_train_lds)
     end = time.time()
     print('dictrsast score :', dictrsast_ridge.score(X_test_lds, y_test_lds))
     print('duration:', end-start)
     print('params:', dictrsast_ridge.get_params()) 
-    
+    """
     """
     X_train = X_train_lds[:, np.newaxis, :]
     X_test = X_test_lds[:, np.newaxis, :]
