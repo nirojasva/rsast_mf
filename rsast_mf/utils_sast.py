@@ -8,11 +8,18 @@ from scipy.io.arff import loadarff
 from sklearn.model_selection import train_test_split
 from numba import njit, prange
 
-@njit(fastmath=True)
+@njit(fastmath=False)
 def znormalize_array(arr):
     m = np.nanmean(arr)
     s = np.nanstd(arr)
+    # s[s == 0] = 1 # avoid division by zero if any
 
+    return (arr - m) / (s + 1e-8)
+    # return arr
+
+def znormalize_array_slow(arr):
+    m = np.nanmean(arr)
+    s = np.nanstd(arr)
     # s[s == 0] = 1 # avoid division by zero if any
 
     return (arr - m) / (s + 1e-8)

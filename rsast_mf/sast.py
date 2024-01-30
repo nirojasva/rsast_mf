@@ -39,7 +39,7 @@ from operator import itemgetter
 
 
 
-from utils_sast import from_2d_array_to_nested, znormalize_array, load_dataset, format_dataset, plot_most_important_features, plot_most_important_feature_on_ts, plot_most_important_feature_sast_on_ts
+from utils_sast import from_2d_array_to_nested, znormalize_array,znormalize_array_slow, load_dataset, format_dataset, plot_most_important_features, plot_most_important_feature_on_ts, plot_most_important_feature_sast_on_ts
 from aeon.classification.shapelet_based import RDSTClassifier
 #from sktime.datasets import load_UCR_UEA_dataset
 
@@ -68,7 +68,7 @@ def apply_kernel(ts, arr):
 
     return d_best
 
-
+@njit(fastmath=False)
 def get_lambda_rdst(ts, arr, q_max, q_min):
 
     m = ts.shape[0]
@@ -79,6 +79,16 @@ def get_lambda_rdst(ts, arr, q_max, q_min):
 
 
     l = kernel.shape[0]
+  
+    
+    #ts=(ts - mean) / (std + 1e-8)
+    
+    #mean = np.nanmean(kernel)
+    #std = np.nanstd(kernel)
+
+    #kernel=(kernel - mean) / (std + 1e-8)
+    kernel=znormalize_array(kernel)
+    
 
     for i in range(m - l + 1):
         
@@ -89,16 +99,15 @@ def get_lambda_rdst(ts, arr, q_max, q_min):
     
     
     random_value = np.random.uniform(quantiles[0], quantiles[1])
-    
 
     return random_value
 
 @njit(fastmath=False)
-def apply_kernel_mf(ts, arr, lm):
+def apply_kernel_rsast_rdst(ts, arr, lm):
     d_best = np.inf  # sdist
     p_best = 0  
     m = ts.shape[0]
-    kernel=arr
+
     
     #kernel = arr[~np.isnan(arr)]  # ignore nan
     kernel = arr[~np.isinf(arr)]  # ignore inf
@@ -114,6 +123,7 @@ def apply_kernel_mf(ts, arr, lm):
         
         d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
         d_vector.append(d)
+
         if d < d_best:
             d_best = d
             p_best = i
@@ -188,7 +198,7 @@ def apply_kernels_dict(X, kernels, q, q_min):
     return out
 
 @njit(parallel=True, fastmath=True)
-def apply_kernels_mf(X, kernels, lms):
+def apply_kernels_rsast_rdst(X, kernels, lms):
     #print("Transforming Dataset with shape:"+str(X.shape))
     #print("Total kernel: "+str(len(kernels)))
     nbk = len(kernels)
@@ -200,7 +210,7 @@ def apply_kernels_mf(X, kernels, lms):
             #print("TS: "+str(t)+" kernel: "+str(i))
             ts = X[t]
             #out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, q)
-            out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, l)
+            out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_rsast_rdst(ts, k, l)
             
     
     
@@ -648,16 +658,14 @@ class RSAST(BaseEstimator, ClassifierMixin):
             return self.classifier._predict_proba_lr(X_transformed)
         return self.classifier.predict_proba(X_transformed)
 
-class RSASTMF(BaseEstimator, ClassifierMixin):
+class RSAST_RDST(BaseEstimator, ClassifierMixin):
 
-    def __init__(self,n_random_points=10, nb_inst_per_class=10,max_shapelet_lengths=None, q_max=0.1, q_min=0, len_method="both", random_state=None, classifier=None, sel_inst_wrepl=False,sel_randp_wrepl=False):
-        super(RSASTMF, self).__init__()
-        self.n_random_points = n_random_points
-        self.nb_inst_per_class = nb_inst_per_class
-        self.max_shapelet_lengths = max_shapelet_lengths
+    def __init__(self,n_shapelet=10000, q_max=0.1, q_min=0, len_list=[11], random_state=None, classifier=None,use_weights=False):
+        super(RSAST_RDST, self).__init__()
+        self.n_shapelet = n_shapelet
         self.q_max = q_max
         self.q_min = q_min
-        self.len_method = len_method
+        self.len_list = len_list
         self.random_state = np.random.RandomState(random_state) if not isinstance(
             random_state, np.random.RandomState) else random_state
         self.classifier = classifier
@@ -668,8 +676,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         self.class_kernel_ = None
         self.dilation_kernel_ = None
         self.lambda_kernel_ = None
-        self.sel_inst_wrepl=sel_inst_wrepl
-        self.sel_randp_wrepl=sel_randp_wrepl
+        self.use_weights=use_weights
         self.time_calculating_weights = None
         self.time_creating_subsequences = None
         self.time_transform_dataset = None
@@ -678,206 +685,97 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
 
     def get_params(self, deep=True):
         return {
-            'len_method': self.len_method,
-            'n_random_points': self.n_random_points,
-            'nb_inst_per_class': self.nb_inst_per_class,
-            'sel_inst_wrepl':self.sel_inst_wrepl,
-            'sel_randp_wrepl':self.sel_randp_wrepl,   
+            'len_list': self.len_list,
+            'use_weights':self.use_weights,   
             'classifier': self.classifier,
             'cand_length_list': self.cand_length_list
         }
 
-    def init_rsastmf(self, X, y):
+    def init_rsast_rdst(self, X, y):
         #0- initialize variables and convert values in "y" to string
         start = time.time()
         y=np.asarray([str(x_s) for x_s in y])
         
-        self.cand_length_list = {}
+        self.cand_length_list = []
         self.kernel_orig_ = []
         self.kernels_generators_ = []
         self.class_kernel_ = []
         self.dilation_kernel_ = []
         self.lambda_kernel_ = []
-
-        
-        
-        
         
         n = []
         classes = np.unique(y)
         self.num_classes = classes.shape[0]
         m_kernel = 0
 
-        #1--calculate ANOVA per each time t throught the lenght of the TS
-        for i in range (X.shape[1]):
-            statistic_per_class= {}
-            for c in classes:
-                assert len(X[np.where(y==c)[0]][:,i])> 0, 'Time t without values in TS'
-
-                statistic_per_class[c]=X[np.where(y==c)[0]][:,i]
-
-
-            statistic_per_class=pd.Series(statistic_per_class)
-            #statistic_per_class = list(statistic_per_class.values())
-            # Calculate t-statistic and p-value
-
-            try:
-                t_statistic, p_value = f_oneway(*statistic_per_class)
-            except DegenerateDataWarning or ConstantInputWarning:
-                p_value=np.nan
-            # Interpretation of the results
-            # if p_value < 0.05: " The means of the populations are significantly different."
-
-            if np.isnan(p_value):
-                n.append(0)
-            else:
-                n.append(1-p_value)
-        end = time.time()
-        self.time_calculating_weights = end-start
-
-
-        #2--calculate PACF and ACF for each TS chossen in each class
         start = time.time()
-        for i, c in enumerate(classes):
-            X_c = X[y == c]
-            cnt = np.min([self.nb_inst_per_class, X_c.shape[0]]).astype(int)
-            #set if the selection of instances is with replacement (if false it is not posible to select the same intance more than one)
-            if self.sel_inst_wrepl ==False:
-                choosen = self.random_state.permutation(X_c.shape[0])[:cnt]
-            else:
-                choosen = self.random_state.choice(X_c.shape[0], cnt)
+
+        for j in range(self.n_shapelet):
+            #chosing randomly lenght of shapelets         
+            rand_value = self.random_state.choice(self.len_list, 1)[0]
+            max_shp_length=max(3,rand_value)
+            self.cand_length_list.append(max_shp_length)  
+
+            #chosing randomly TS to extract shapelets   
+            idx = self.random_state.choice(X.shape[0], 1)[0]
+
+            #chosing randomly dilation for shapelets  
+            xs=random.uniform(0, math.log2(X.shape[1] / max_shp_length))
+            shp_dil=int(2**xs)
             
+
+            max_shp_length=max_shp_length*shp_dil                   
+
+            #extracting initial random point for shapelet
+            rand_point_ts = self.random_state.choice(len(X[idx])-max_shp_length+1, 1, replace=True)
+
+            i=rand_point_ts[0]
+                    
+
+
+            #2.6-- Extract the subsequence with that point
+            kernel = X[idx][i:i+(max_shp_length-shp_dil+1)].reshape(1,-1)
+            kernel = np.squeeze(kernel)
+            #if shp_dil>1: 
+                #print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
+
+
+            for j in range(len(kernel)):
+                
+                if(j%shp_dil==0):
+                    kernel[j]=kernel[j]
+                else: 
+                    kernel[j]=np.nan
+
+            #if shp_dil>1:    
+                #print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
+
+            if m_kernel<max_shp_length:
+                m_kernel = max_shp_length            
             
+
+
+
+            X_c=X[np.where(y==y[idx])]
             
+
+
+            choosen = self.random_state.choice(X_c.shape[0], 1)[0]
+ 
+            ld = get_lambda_rdst(X_c[choosen], kernel, self.q_max, self.q_min) #not normalized ts neither kernel
+
+            self.kernel_orig_.append(kernel)
+            self.kernels_generators_.append(np.squeeze(X[idx].reshape(1,-1)))
+            self.class_kernel_.append(y[idx])
+            self.dilation_kernel_.append(shp_dil)
+            self.lambda_kernel_.append(ld)
             
-            for rep, idx in enumerate(choosen):
-                self.cand_length_list[c+","+str(idx)+","+str(rep)] = []
-                non_zero_acf=[]
-                #tlt="class-"+c+",idx-"+str(idx)+",rep-"+str(rep)
-                #plt.figure()
-                #plt.title(tlt)
-                #plt.plot(X_c[idx])
-                #plt.show()
-                
-                if (self.len_method == "both" or self.len_method == "ACF" or self.len_method == "Max ACF") :
-                #2.1-- Compute Autorrelation per object
-                    acf_val, acf_confint = acf(X_c[idx], nlags=len(X_c[idx])-1,  alpha=.05)
-                    
-                    #plot_acf(X_c[idx],title="ACF: "+tlt, lags=len(X_c[idx])-1,  alpha=.05)                
-                    #plt.show()
-
-                    prev_acf=0    
-                    for j, conf in enumerate(acf_confint):
-
-                        if(3<=j and (0 < acf_confint[j][0] <= acf_confint[j][1] or acf_confint[j][0] <= acf_confint[j][1] < 0) ):
-                            #Consider just the maximum ACF value
-                            if prev_acf!=0 and self.len_method == "Max ACF":
-                                non_zero_acf.remove(prev_acf)
-                                self.cand_length_list[c+","+str(idx)+","+str(rep)].remove(prev_acf)
-                            non_zero_acf.append(j)
-                            self.cand_length_list[c+","+str(idx)+","+str(rep)].append(j)
-                            prev_acf=j        
-                
-                non_zero_pacf=[]
-                if (self.len_method == "both" or self.len_method == "PACF" or self.len_method == "Max PACF"):
-                    #2.2 Compute Partial Autorrelation per object
-                    pacf_val, pacf_confint = pacf(X_c[idx], method="ols", nlags=(len(X_c[idx])//2) - 1,  alpha=.05)
-
-                    
-                    #plot_pacf(X_c[idx],title="PACF: "+tlt, method="ols", lags=(len(X_c[idx])//2) - 1,  alpha=.05)                
-                    #plt.show()
-                    prev_pacf=0
-                    for j, conf in enumerate(pacf_confint):
-
-                        if(3<=j and (0 < pacf_confint[j][0] <= pacf_confint[j][1] or pacf_confint[j][0] <= pacf_confint[j][1] < 0) ):
-                            #Consider just the maximum PACF value
-                            if prev_pacf!=0 and self.len_method == "Max PACF":
-                                non_zero_pacf.remove(prev_pacf)
-                                self.cand_length_list[c+","+str(idx)+","+str(rep)].remove(prev_pacf)
-                            #print("Truncated lengths to:"+str(self.max_shapelet_lengths))
-                            if self.max_shapelet_lengths!=None and (self.max_shapelet_lengths > len(non_zero_pacf)):
-                                
-                                non_zero_pacf.append(j)
-                                self.cand_length_list[c+","+str(idx)+","+str(rep)].append(j)
-                                prev_pacf=j 
-                            
-                if (self.len_method == "all"):
-                    self.cand_length_list[c+","+str(idx)+","+str(rep)].extend(np.arange(3,1+ len(X_c[idx])))
-                
-                #2.3-- Save the maximum autocorralated lag value as shapelet lenght 
-                
-                if len(self.cand_length_list[c+","+str(idx)+","+str(rep)])==0:
-                    #chose a random lenght using the lenght of the time series (added 1 since the range start in 0)
-                    rand_value= self.random_state.choice(len(X_c[idx]), 1)[0]+1
-                    self.cand_length_list[c+","+str(idx)+","+str(rep)].extend([max(3,rand_value)])
-
-                #remove duplicates for the list of lenghts
-                self.cand_length_list[c+","+str(idx)+","+str(rep)]=list(set(self.cand_length_list[c+","+str(idx)+","+str(rep)]))
-                for max_shp_length in self.cand_length_list[c+","+str(idx)+","+str(rep)]:
-                    
-                    #2.4-- Choose randomly n_random_points point for a TS                
-                    #2.5-- calculate the weights of probabilities for a random point in a TS
-                    if sum(n) == 0 :
-                        # Determine equal weights of a random point point in TS is there are no significant points
-                        # print('All p values in One way ANOVA are equal to 0') 
-                        weights = [1/len(n) for i in range(len(n))]
-                        weights = weights[:len(X_c[idx])-max_shp_length +1]/np.sum(weights[:len(X_c[idx])-max_shp_length+1])
-                    else: 
-                        # Determine the weights of a random point point in TS (excluding points after n-l+1)
-                        weights = n / np.sum(n)
-                        weights = weights[:len(X_c[idx])-max_shp_length +1]/np.sum(weights[:len(X_c[idx])-max_shp_length+1])
-                                           
-                    
-                    if self.n_random_points > len(X_c[idx])-max_shp_length+1 and self.sel_randp_wrepl==False:
-                        #set a upper limit for the posible of number of random points when selecting without replacement
-                        limit_rpoint=len(X_c[idx])-max_shp_length+1
-                        rand_point_ts = self.random_state.choice(len(X_c[idx])-max_shp_length+1, limit_rpoint, p=weights, replace=self.sel_randp_wrepl)
-
-                    else:
-                        rand_point_ts = self.random_state.choice(len(X_c[idx])-max_shp_length+1, self.n_random_points, p=weights, replace=self.sel_randp_wrepl)
-
-                    
-                    
-                    
-                    for i in rand_point_ts:        
-                        #max_shp_length=5      
-                        x=random.uniform(0, math.log2(len(X_c[idx]) / max_shp_length))
-                        shp_dil=int(2**x)
-                        #shp_dil=1
-                        max_shp_length=max_shp_length*shp_dil
-                        #print("dil: 2**"+str(x)+"="+str(int(2**x)))
-                        #print("orig kernel-len "+str((max_shp_length))+":"+str(X_c[idx][i:i+max_shp_length]))
-                        
-                        #2.6-- Extract the subsequence with that point
-                        kernel = X_c[idx][i:i+max_shp_length].reshape(1,-1)
-                        kernel = np.squeeze(kernel)
-                        #if shp_dil>1: 
-                            #print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
-                        
-                        for j in range(len(kernel)):
-                            
-                            if(j%shp_dil==0):
-                                kernel[j]=kernel[j]
-                            else: 
-                                kernel[j]=np.nan
-
-                        #if shp_dil>1:    
-                            #print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
-                        if m_kernel<max_shp_length:
-                            m_kernel = max_shp_length            
-                        
-                        #choosen = self.random_state.choice(X_c.shape[0], 1)[0]
-                        ld = get_lambda_rdst(X_c[idx], kernel, self.q_max, self.q_min)
-
-                        self.kernel_orig_.append(kernel)
-                        self.kernels_generators_.append(np.squeeze(X_c[idx].reshape(1,-1)))
-                        self.class_kernel_.append(c)
-                        self.dilation_kernel_.append(shp_dil)
-                        self.lambda_kernel_.append(ld)
+            self.cand_length_list = []
         
         print("total kernels:"+str(len(self.kernel_orig_)))
         
-        self.kernel_orig_ = self.kernel_orig_
+        
+        
         
         #3--save the calculated subsequences
         
@@ -892,6 +790,8 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
             self.kernels_[k, :len(kernel)] = znormalize_array(kernel)
         
         end = time.time()
+        
+    
         self.time_creating_subsequences = end-start
 
     def fit(self, X, y):
@@ -899,11 +799,29 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         X, y = check_X_y(X, y)  # check the shape of the data
 
         # randomly choose reference time series and generate kernels
-        self.init_rsastmf(X, y)
+        self.init_rsast_rdst(X, y)
 
         start = time.time()
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
+        
+        print("self.kernel_orig_")
+        print(self.kernel_orig_)
+
+        print("self.kernels_")
+        print(self.kernels_)
+
+        print("self.lambda_kernel_")
+        print(self.lambda_kernel_)
+
+        print("X")
+        print(X)
+        
+
+        X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
+        
+        print("X_transformed")
+        print(X_transformed)
+
         end = time.time()
         self.transform_dataset = end-start
 
@@ -937,7 +855,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         X = check_array(X)  # validate the shape of X
 
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
+        X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
 
         return self.classifier.predict(X_transformed)
 
@@ -947,7 +865,7 @@ class RSASTMF(BaseEstimator, ClassifierMixin):
         X = check_array(X)  # validate the shape of X
 
         # subsequence transform of X
-        X_transformed = apply_kernels_mf(X, self.kernels_, self.lambda_kernel_)
+        X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
 
         if isinstance(self.classifier, LinearClassifierMixin):
             return self.classifier._predict_proba_lr(X_transformed)
@@ -1244,7 +1162,7 @@ class DICTRSAST(BaseEstimator, ClassifierMixin):
                         #max_shp_length=5      
                         x=random.uniform(0, math.log2(len(X_c[idx]) / max_shp_length))
                         shp_dil=int(2**x)
-                        #shp_dil=1
+                        shp_dil=1
                         max_shp_length=max_shp_length*shp_dil
                         #print("dil: 2**"+str(x)+"="+str(int(2**x)))
                         #print("orig kernel-len "+str((max_shp_length))+":"+str(X_c[idx][i:i+max_shp_length]))
@@ -1522,46 +1440,45 @@ if __name__ == "__main__":
     #plot_most_important_feature_on_ts(set_ts=rsast_ridge.kernels_generators_, labels=rsast_ridge.class_generators_, features=rsast_ridge.kernel_orig_, scores=rsast_ridge.classifier.coef_[0], limit=3, offset=0,znormalized=False)   
     #plot_most_important_features(rsast_ridge.kernel_orig_, rsast_ridge.classifier.coef_[0], limit=3,scale_color=False)
 
-    
-    start = time.time()
-    random_state = None
-    rsastmf_ridge = RSASTMF(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0.1, q_min=0)
-    rsastmf_ridge.fit(X_train_lds, y_train_lds)
-    end = time.time()
-    print('rsastmf score :', rsastmf_ridge.score(X_test_lds, y_test_lds))
-    print('duration:', end-start)
-    print('params:', rsastmf_ridge.get_params()) 
-    #print('classifier:',rsast_ridge.classifier.coef_[0])
-    
-    #fname = f'images/chinatown-rf-class{c}-top5-features-on-ref-ts.jpg'
-    #print(f"ts.shape{pd.array(rsast_ridge.kernels_generators_).shape}")
-    #print(f"kernel_d.shape{pd.array(rsast_ridge.kernel_orig_).shape}")
-    #rsastmf_ridge.plot_most_important_features_mfrsast()
-    #rsastmf_ridge.plot_most_important_feature_on_ts_mfrsast()
+
 
     start = time.time()
     random_state = None
-    dictrsast_ridge = DICTRSAST(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0.1, q_min=0)
-    dictrsast_ridge.fit(X_train_lds, y_train_lds)
+    rdst_nr_ridge = RSAST_RDST(n_shapelet=10,len_list=[5], q_max=0.1, q_min=0, use_weights=False)
+    rdst_nr_ridge.fit(X_train_lds, y_train_lds)
     end = time.time()
-    print('dictrsast score :', dictrsast_ridge.score(X_test_lds, y_test_lds))
+    print('rdst_nr_ridge score :', rdst_nr_ridge.score(X_test_lds, y_test_lds))
     print('duration:', end-start)
-    print('params:', dictrsast_ridge.get_params()) 
+    print('params:', rdst_nr_ridge.get_params()) 
+    #print('classifier:',rdst_nr_ridge.classifier.coef_[0])
+    
+
+
+    #start = time.time()
+    #random_state = None
+    #dictrsast_ridge = DICTRSAST(n_random_points=10, nb_inst_per_class=10, len_method="both", q_max=0.1, q_min=0)
+    #dictrsast_ridge.fit(X_train_lds, y_train_lds)
+    #end = time.time()
+    #print('dictrsast score :', dictrsast_ridge.score(X_test_lds, y_test_lds))
+    #print('duration:', end-start)
+    #print('params:', dictrsast_ridge.get_params()) 
     """
     """
     X_train = X_train_lds[:, np.newaxis, :]
     X_test = X_test_lds[:, np.newaxis, :]
     y_train=np.asarray([int(x_s) for x_s in y_train_lds])
     y_test=np.asarray([int(x_s) for x_s in y_test_lds])
+    
+    
     start = time.time()
-
     rdst = RDSTClassifier(
-        max_shapelets=4,
-        shapelet_lengths=[7],
-        proba_normalization=0,
-        save_transformed_data=True
+        max_shapelets=100000,
+        shapelet_lengths=[5],
+        proba_normalization=1,
+        threshold_percentiles=[0,10],
+        save_transformed_data=False
     )
-    rdst = RDSTClassifier(proba_normalization=0, save_transformed_data=True)
+    #rdst = RDSTClassifier(proba_normalization=0, save_transformed_data=True)
     rdst.fit(X_train, y_train)
     end = time.time()
     
