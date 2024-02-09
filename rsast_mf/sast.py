@@ -72,7 +72,6 @@ def apply_kernel(ts, arr):
 def get_lambda_rdst(ts, arr, q_max, q_min):
 
     m = ts.shape[0]
-    kernel=arr
     #kernel = arr[~np.isnan(arr)]  # ignore nan
     kernel = arr[~np.isinf(arr)]  # ignore inf
     d_vector = []
@@ -89,15 +88,21 @@ def get_lambda_rdst(ts, arr, q_max, q_min):
     #kernel=(kernel - mean) / (std + 1e-8)
     kernel=znormalize_array(kernel)
     
+    
+
 
     for i in range(m - l + 1):
-        
-        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        norm_ts = znormalize_array(ts[i:i+l])
+ 
+
+        d = np.nansum((norm_ts - kernel)**2)**(1/2)
+
         d_vector.append(d)
     
+
     quantiles = np.quantile(d_vector, [q_min, q_max])
-    
-    
+
+
     random_value = np.random.uniform(quantiles[0], quantiles[1])
 
     return random_value
@@ -121,7 +126,8 @@ def apply_kernel_rsast_rdst(ts, arr, lm):
 
     for i in range(m - l + 1):
         
-        d = np.nansum((znormalize_array(ts[i:i+l]) - kernel)**2)
+        norm_ts = znormalize_array(ts[i:i+l])
+        d = np.nansum((norm_ts - kernel)**2)**(1/2)
         d_vector.append(d)
 
         if d < d_best:
@@ -199,21 +205,15 @@ def apply_kernels_dict(X, kernels, q, q_min):
 
 @njit(parallel=True, fastmath=True)
 def apply_kernels_rsast_rdst(X, kernels, lms):
-    #print("Transforming Dataset with shape:"+str(X.shape))
-    #print("Total kernel: "+str(len(kernels)))
     nbk = len(kernels)
     out = np.zeros((X.shape[0], nbk*3), dtype=np.float32)
     for i in prange(nbk):
         k = kernels[i]
         l = lms[i]
         for t in range(X.shape[0]):
-            #print("TS: "+str(t)+" kernel: "+str(i))
             ts = X[t]
-            #out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_mf(ts, k, q)
             out[t][i*3], out[t][i*3+1], out[t][i*3+2] = apply_kernel_rsast_rdst(ts, k, l)
-            
-    
-    
+   
     return out
 
 class SAST(BaseEstimator, ClassifierMixin):
@@ -688,7 +688,7 @@ class RSAST_RDST(BaseEstimator, ClassifierMixin):
             'len_list': self.len_list,
             'use_weights':self.use_weights,   
             'classifier': self.classifier,
-            'cand_length_list': self.cand_length_list
+            
         }
 
     def init_rsast_rdst(self, X, y):
@@ -710,48 +710,52 @@ class RSAST_RDST(BaseEstimator, ClassifierMixin):
 
         start = time.time()
 
+
+
         for j in range(self.n_shapelet):
+            
             #chosing randomly lenght of shapelets         
             rand_value = self.random_state.choice(self.len_list, 1)[0]
-            max_shp_length=max(3,rand_value)
-            self.cand_length_list.append(max_shp_length)  
+            len_kernel=max(3,rand_value)
+               
+
+            #chosing randomly dilation for shapelets  
+            exp_x=self.random_state.uniform(0, math.log2(X.shape[1] / len_kernel))
+            shp_dil=int(2**exp_x)
+            
+            
+            max_shp_length=(len_kernel-1)*shp_dil
 
             #chosing randomly TS to extract shapelets   
             idx = self.random_state.choice(X.shape[0], 1)[0]
 
-            #chosing randomly dilation for shapelets  
-            xs=random.uniform(0, math.log2(X.shape[1] / max_shp_length))
-            shp_dil=int(2**xs)
-            
-
-            max_shp_length=max_shp_length*shp_dil                   
-
             #extracting initial random point for shapelet
-            rand_point_ts = self.random_state.choice(len(X[idx])-max_shp_length+1, 1, replace=True)
-
-            i=rand_point_ts[0]
-                    
-
-
+            i = self.random_state.choice(len(X[idx])-max_shp_length+1, 1)[0]
+            
             #2.6-- Extract the subsequence with that point
-            kernel = X[idx][i:i+(max_shp_length-shp_dil+1)].reshape(1,-1)
+            kernel = X[idx][i:i+max_shp_length+1].copy().reshape(1,-1)
             kernel = np.squeeze(kernel)
-            #if shp_dil>1: 
-                #print("orig kernel-len "+str(len(kernel))+":"+str(kernel))
+            
+            """
+            if shp_dil>1: 
+                print("orig kernel-len "+str(len_kernel)+":"+str(kernel))
+                print("len kernel: "+str(len(kernel)))
 
+            """
+            
+            for h in range(max_shp_length):
+                if(h%shp_dil!=0):
+                    kernel[h]=np.nan
 
-            for j in range(len(kernel)):
-                
-                if(j%shp_dil==0):
-                    kernel[j]=kernel[j]
-                else: 
-                    kernel[j]=np.nan
+            
+            """
+            if shp_dil>1:    
+                print("dil kernel-len ((len_kernel-1)*shp_dil) "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
+                print("len kernel: "+str(len(kernel)))
+            """
 
-            #if shp_dil>1:    
-                #print("dil kernel-len "+str(max_shp_length)+" shp_dil "+str(shp_dil)+":"+str(kernel))
-
-            if m_kernel<max_shp_length:
-                m_kernel = max_shp_length            
+            if m_kernel < len(kernel):
+                m_kernel = len(kernel)         
             
 
 
@@ -763,35 +767,41 @@ class RSAST_RDST(BaseEstimator, ClassifierMixin):
             choosen = self.random_state.choice(X_c.shape[0], 1)[0]
  
             ld = get_lambda_rdst(X_c[choosen], kernel, self.q_max, self.q_min) #not normalized ts neither kernel
-
+            #ld = get_lambda_rdst(X[idx], kernel, self.q_max, self.q_min) #not normalized ts neither kernel
             self.kernel_orig_.append(kernel)
             self.kernels_generators_.append(np.squeeze(X[idx].reshape(1,-1)))
             self.class_kernel_.append(y[idx])
             self.dilation_kernel_.append(shp_dil)
             self.lambda_kernel_.append(ld)
             
-            self.cand_length_list = []
+        
         
         print("total kernels:"+str(len(self.kernel_orig_)))
         
-        
-        
+  
         
         #3--save the calculated subsequences
         
         
         n_kernels = len (self.kernel_orig_)
-        
+               
         
         self.kernels_ = np.full(
             (n_kernels, m_kernel), dtype=np.float32, fill_value=np.inf)
         
         for k, kernel in enumerate(self.kernel_orig_):
             self.kernels_[k, :len(kernel)] = znormalize_array(kernel)
+
+        self.lambda_kernel_=np.array(self.lambda_kernel_)    
+
         
         end = time.time()
         
-    
+        #print("original kernels")
+        #print(pd.DataFrame(self.kernel_orig_))
+        #print("normalized kernels")
+        #print(pd.DataFrame(self.kernels_))
+
         self.time_creating_subsequences = end-start
 
     def fit(self, X, y):
@@ -803,24 +813,21 @@ class RSAST_RDST(BaseEstimator, ClassifierMixin):
 
         start = time.time()
         # subsequence transform of X
+        print("Fitting...")
         
-        print("self.kernel_orig_")
-        print(self.kernel_orig_)
+        """
+        print("X")
+        print(pd.DataFrame(X))
 
         print("self.kernels_")
         print(self.kernels_)
 
         print("self.lambda_kernel_")
         print(self.lambda_kernel_)
-
-        print("X")
-        print(X)
-        
-
+        """
         X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
         
-        print("X_transformed")
-        print(X_transformed)
+
 
         end = time.time()
         self.transform_dataset = end-start
@@ -854,120 +861,53 @@ class RSAST_RDST(BaseEstimator, ClassifierMixin):
 
         X = check_array(X)  # validate the shape of X
 
+        print("Predicting...")
+        """
+        print("X")
+        print(pd.DataFrame(X))
+
+        print("self.kernels_")
+        print(self.kernels_)
+
+        print("self.lambda_kernel_")
+        print(self.lambda_kernel_)
+        """
+        
         # subsequence transform of X
         X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
+        
 
+        
         return self.classifier.predict(X_transformed)
 
     def predict_proba(self, X):
         check_is_fitted(self)  # make sure the classifier is fitted
 
         X = check_array(X)  # validate the shape of X
+        
+        print("Predicting Prob...")
+        """
+        print("X")
+        print(pd.DataFrame(X))
 
+        print("self.kernels_")
+        print(self.kernels_)
+
+        print("self.lambda_kernel_")
+        print(self.lambda_kernel_)
+        """
         # subsequence transform of X
         X_transformed = apply_kernels_rsast_rdst(X, self.kernels_, self.lambda_kernel_)
 
         if isinstance(self.classifier, LinearClassifierMixin):
             return self.classifier._predict_proba_lr(X_transformed)
+        
+        #print("X_transformed")
+        #print(pd.DataFrame(X_transformed))       
+         
+        
         return self.classifier.predict_proba(X_transformed)
     
-    def plot_most_important_features_mfrsast(self, limit = 3, scale_color=False):
-        type_features_cl=["min","argmin","SO"]*len(self.kernel_orig_)
-        features = zip(self.kernel_orig_, self.classifier.coef_[0], self.dilation_kernel_, type_features_cl)
-        #sort features by absolute score in classifier
-        sorted_features = sorted(features, key=lambda sublist: abs(sublist[1]), reverse=True)
-        
-        for l, sf in enumerate(sorted_features[:limit]):
-            
-            kernel, score, dilation,t_feature = sf
-            print("kernel-" +str(l+1)+":"+str(kernel))
-
-            dmask = np.isfinite(kernel.astype(np.double))
-            shp_range=np.arange(kernel.size)
-            if scale_color:
-                
-                plt.plot(shp_range[dmask], kernel[dmask], linewidth=50*score, label="feature"+str(l+1)+": "+"d="+str(dilation)+" coef="+str(f'{score:.5}'), linestyle='-', marker='o')
-            else:
-                
-                plt.plot(shp_range[dmask], kernel[dmask], label="feature"+str(l+1)+": "+"d="+str(dilation)+" coef="+str(f'{score:.5}'), linestyle='-', marker='o')
-        plt.legend()
-        plt.show()
-
-    def plot_most_important_feature_on_ts_mfrsast( self, offset=0, limit = 3, fname=None, znormalized=False):
-        '''Plot the most important features on ts'''
-                
-        type_features_cl=["min","argmin","SO"]*len(self.kernel_orig_)
-        features = zip(self.kernel_orig_, self.classifier.coef_[0], self.dilation_kernel_, type_features_cl, self.kernels_generators_, self.class_kernel_)
-        
-        sorted_features = sorted(features, key=lambda sublist: abs(sublist[1]), reverse=True)
-        max_ = min(limit, len(sorted_features) - offset)    
-        #sorted_features = sorted(features, key=itemgetter(1), reverse=True)
-        
-        
-        
-        if max_ <= 0:
-            print('Nothing to plot')
-            return        
-        
-        
-        for s, l in enumerate(np.unique(self.class_kernel_)):
-            fig, axes = plt.subplots(1, max_, sharey=True, figsize=(3*max_, 3), tight_layout=True, clear=True)
-            
-                    
-            for f in range(max_):
-                
-                kernel, score, dilation, type_f, ts, label = sorted_features[f+offset]
-                
-                if label!=l:
-                    *_, ts, _=list(filter(lambda x: x[5] == l,sorted_features))[0]
-
-                    
-                    
-
-                kernel_d=[]
-                for value in kernel:
-                    for j in range(dilation):
-                        if j==0:
-                            kernel_d.append(value)        
-                        else:
-                            kernel_d.append(None)
-                kernel_d=np.array(kernel_d)
-                
-                if znormalized:
-                    kernel_d = znormalize_array(kernel_d)
-                    ts = znormalize_array(ts)            
-                
-                d_best = np.inf
-
-                
-                for i in range(ts.size - kernel_d.size + 1):
-
-                    d=0
-                    for k, value in enumerate(kernel_d):
-                    
-
-                        
-                        if kernel_d[k] is not None:
-                            d = d+(ts[i:i+kernel_d.size][k] - kernel_d[k])**2
-                        else:
-                            break
-                    if d < d_best:
-                        d_best = d
-                        start_pos = i
-                dmask = np.isfinite(kernel_d.astype(np.double))
-                shp_range=np.arange(start_pos, start_pos + kernel_d.size)
-                axes[f].plot(shp_range[dmask], kernel_d[dmask], linewidth=6,color="darkorange", linestyle='-', marker='o')
-                axes[f].plot(range(ts.size), ts, linewidth=2,color='darkblue')
-                axes[f].set_title(f'feature: {f+1+offset}, type: {type_f}')
-                #print('gph shapelet values:',str(f+1),' start_pos:',start_pos,' shape:', kernel_d.size,' dilation:', str(dilation))
-                #print(" shapelet:", kernel_d )
-
-            fig.suptitle(f'Ground truth class: {l}', fontsize=15)
-
-            plt.show()
-
-            if fname is not None:
-                fig.savefig(fname)
 
 class DICTRSAST(BaseEstimator, ClassifierMixin):
 
@@ -1411,10 +1351,10 @@ if __name__ == "__main__":
     X_test_lds, y_test_lds = format_dataset(ds_test_lds)
     X_train_lds, y_train_lds = format_dataset(ds_train_lds)
     
-    X_train_lds=np.nan_to_num(X_train_lds)
-    y_train_lds=np.nan_to_num(y_train_lds)
-    X_test_lds=np.nan_to_num(X_test_lds)
-    y_test_lds=np.nan_to_num(y_test_lds)
+    np.nan_to_num(X_train_lds, copy=False)
+    np.nan_to_num(y_train_lds, copy=False)
+    np.nan_to_num(X_test_lds, copy=False)
+    np.nan_to_num(y_test_lds, copy=False)
     
     print('Format: load_dataset_'+ds)
     print(X_train_lds.shape)
@@ -1426,8 +1366,11 @@ if __name__ == "__main__":
     print(y_train_lds.shape)
     print(y_test_lds.shape)
     
+    print("X_train_lds before rdst")
+    #print(pd.DataFrame(X_train_lds))
+    print("# nan values")
+    print(pd.DataFrame(X_train_lds).isna().sum().sum())
 
-   
     
     start = time.time()
     random_state = None
@@ -1440,11 +1383,11 @@ if __name__ == "__main__":
     #plot_most_important_feature_on_ts(set_ts=rsast_ridge.kernels_generators_, labels=rsast_ridge.class_generators_, features=rsast_ridge.kernel_orig_, scores=rsast_ridge.classifier.coef_[0], limit=3, offset=0,znormalized=False)   
     #plot_most_important_features(rsast_ridge.kernel_orig_, rsast_ridge.classifier.coef_[0], limit=3,scale_color=False)
 
-
-
+    
+    ridge = RidgeClassifierCV()
     start = time.time()
     random_state = None
-    rdst_nr_ridge = RSAST_RDST(n_shapelet=10,len_list=[5], q_max=0.1, q_min=0, use_weights=False)
+    rdst_nr_ridge = RSAST_RDST(n_shapelet=10000,len_list=[5], q_max=0.1, q_min=0, use_weights=False, classifier=ridge)
     rdst_nr_ridge.fit(X_train_lds, y_train_lds)
     end = time.time()
     print('rdst_nr_ridge score :', rdst_nr_ridge.score(X_test_lds, y_test_lds))
@@ -1452,7 +1395,10 @@ if __name__ == "__main__":
     print('params:', rdst_nr_ridge.get_params()) 
     #print('classifier:',rdst_nr_ridge.classifier.coef_[0])
     
-
+    print("X_train_lds after RDST")
+    #print(pd.DataFrame(X_train_lds))
+    print("# nan values")
+    print(pd.DataFrame(X_train_lds).isna().sum().sum())
 
     #start = time.time()
     #random_state = None
@@ -1462,31 +1408,40 @@ if __name__ == "__main__":
     #print('dictrsast score :', dictrsast_ridge.score(X_test_lds, y_test_lds))
     #print('duration:', end-start)
     #print('params:', dictrsast_ridge.get_params()) 
-    """
-    """
+    
+    
     X_train = X_train_lds[:, np.newaxis, :]
     X_test = X_test_lds[:, np.newaxis, :]
     y_train=np.asarray([int(x_s) for x_s in y_train_lds])
     y_test=np.asarray([int(x_s) for x_s in y_test_lds])
     
+
     
     start = time.time()
     rdst = RDSTClassifier(
-        max_shapelets=100000,
+        max_shapelets=10000,
         shapelet_lengths=[5],
         proba_normalization=1,
         threshold_percentiles=[0,10],
-        save_transformed_data=False
+        save_transformed_data=True
     )
     #rdst = RDSTClassifier(proba_normalization=0, save_transformed_data=True)
-    rdst.fit(X_train, y_train)
+
+
+    rdst.fit(X_train_lds, y_train_lds)
     end = time.time()
+
+
+    
+    print('rdst score :', rdst.score(X_test_lds, y_test_lds))
+    print('duration:', end-start)
+    print('params:', rdst.get_params())
+
+    """
     
 
     
-    print('rdst score :', rdst.score(X_test, y_test))
-    print('duration:', end-start)
-    print('params:', rdst.get_params())
+    """
     #print(rdst.transformed_data_)
     """
     for i, shp in enumerate(rdst._transformer.shapelets_[0].squeeze()):
